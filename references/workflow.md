@@ -8,6 +8,25 @@ First edit: the original refused a factual, non-graphic history comparison. The 
 
 The first recipe uses native projected abliteration. The second uses native MPOA with a parameter-only subclass and a custom development scoring heuristic. It is not a stock one-click menu option. The desired/undesired instructions in the editing configuration generate the contrast during editing; they are absent from the inference comparisons. The heuristic needs human review.
 
+## The scripted path
+
+`doctor.py`, `setup.py` and `run.py` automate everything below for the history recipe. Each `run.py` stage maps onto a manual step in this file:
+
+| Stage | Manual equivalent |
+| --- | --- |
+| `doctor` | Check OS, accelerator, memory and disk |
+| `hash-original` | SHA-256 of every original file and every tensor (`freeze.py hash`) |
+| `baseline` | `compare.py` on the original with `assets/history/regression-cases.json`; stops if no refusal phrase |
+| `prepare` | `prepare.py --mode history` into `RUN/edit` |
+| `edit` | `HERETIC_CONFIG_FILE=RUN/edit/history.toml heretic`, run from `RUN/edit/history` |
+| `check-copy` | Confirm `RUN/edit/history/model` holds config and weights |
+| `freeze` | Hash the copy, per-tensor diff, candidate table from Heretic's journal, `evidence/manifest.json` |
+| `compare` | `compare.py` on both models with the target replay plus `assets/history/check-cases.json` |
+| `verify` | Re-hash both; confirm identical input tokens on every case |
+| `report` | `report.html`, `REPORT.md`, `summary.json` |
+
+`run.py add-cases` runs fresh post-freeze cases on both models and refreshes the report. The rest of this file is the record of what was established and the manual route.
+
 ## Focused Qwen3 walkthrough
 
 The current video uses only the history edit. Run `prepare.py --mode history` in a new output directory. The default `both` also prepares the separate customer-behavior experiment, which is optional. The exact history question is in `assets/history/reduce-refusal.txt`. Run that question on the original first, then reload the newly saved `history/model` with the same system instruction and settings. Use `references/viewer-prompts.md` for the installation, fresh-run, comparison and Harness requests.
@@ -18,7 +37,7 @@ Install the full ZIP in `.claude/skills/unlock` inside the project. Native Claud
 
 ## Setup
 
-Resolve SKILL to this skill directory and WORK to a new experiment directory. Use absolute paths and shell quoting, especially with spaces. Check for existing source/environment/model before installing. For a fresh setup:
+`setup.py` performs this section and records the result in `WORK/unlock-setup.json`. By hand: resolve SKILL to this skill directory and WORK to a new experiment directory. Use absolute paths and shell quoting, especially with spaces. Check for existing source/environment/model before installing. For a fresh setup:
 
 ```sh
 git clone https://github.com/p-e-w/heretic "$WORK/heretic"

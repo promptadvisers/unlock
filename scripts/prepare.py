@@ -7,8 +7,12 @@ import platform
 import shlex
 import shutil
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import unlock_common as uc  # noqa: E402
 
 SKILL = Path(__file__).resolve().parent.parent
 COMMIT = '8b0dbac4dd180dc23d62fdf9714dc9d8b31f3d2c'
@@ -17,7 +21,7 @@ REVISION = 'cdbee75f17c01a7cc42f958dc650907174af0554'
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--model', type=Path, required=True, help='Local original Qwen snapshot')
+    p.add_argument('--model', type=Path, required=True, help='Local model folder (sharded or single-file safetensors)')
     p.add_argument('--out', type=Path, required=True, help='New directory; existing paths are refused')
     p.add_argument('--heretic', type=Path, required=True, help='Heretic executable in its isolated environment')
     p.add_argument('--device', choices=['mps','cuda','cpu'], default='mps')
@@ -31,19 +35,12 @@ def main():
     out = out.resolve()
     if out == model or model in out.parents or out in model.parents:
         p.error('Output and input model directories must be separate, not nested.')
-    index = model / 'model.safetensors.index.json'
-    if not index.is_file(): p.error('Expected a local sharded Qwen safetensors snapshot or saved copy.')
-    spec = json.loads(index.read_text())
-    weight_files = []
-    for name in sorted(set(spec['weight_map'].values())):
-        relative = Path(name)
-        if relative.is_absolute() or '..' in relative.parts: p.error('Invalid model shard path: '+name)
-        f = model / relative
-        # Hugging Face snapshots legitimately symlink shards into sibling blob storage.
-        if not f.is_file(): p.error('Missing model shard: '+name)
-        weight_files.append(f)
-    for name in ['config.json','tokenizer_config.json','tokenizer.json']:
-        if not (model/name).is_file(): p.error('Missing model file: '+name)
+    # Sharded (model.safetensors.index.json) or single-file (model.safetensors) models.
+    # Hugging Face snapshots legitimately symlink weights into sibling blob storage.
+    try:
+        weight_files = uc.weight_files(model)
+    except ValueError as e:
+        p.error(str(e))
     if not executable.is_file() or not os.access(executable, os.X_OK): p.error('Heretic executable is not available.')
     parent = out.parent
     while not parent.exists(): parent=parent.parent

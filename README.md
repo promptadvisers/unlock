@@ -59,7 +59,10 @@ Two ordinary tasks (a change-making sum and a short email) and one unrelated his
 - **The original stays untouched.** Every run goes into a brand new folder. The scripts refuse to write over an existing folder or inside the original model.
 - **A real saved model.** The result is a normal model folder on your disk. No special prompt is doing the work. You can load it anywhere the original loads.
 - **A fair comparison.** Both copies get the same system message, the same question and greedy settings. The script records the exact input tokens so you can prove the inputs matched.
-- **Receipts by default.** Raw replies, commands, source versions and file hashes are saved next to the model.
+- **A machine check first.** One command tells you in plain words whether your computer can do it, before anything big downloads.
+- **One command for the whole run.** Setup and the experiment are two scripts. If anything stops, it picks up where it left off.
+- **A report you can share.** Every run ends with a single HTML page: both replies side by side, the fair-test checks, what changed inside the model, and the candidates Heretic tried.
+- **Receipts by default.** Raw replies, input tokens, source versions and a fingerprint of every file and every weight table are saved next to the model.
 - **Guard rails on the claims.** The skill tells the assistant to keep practice examples separate from fresh checks, to report what got worse, and never to credit the edit for something a prompt did.
 
 ## Install
@@ -122,11 +125,15 @@ In Codex, swap `/unlock` for `$unlock`. More ready-made requests live in [`refer
 
 1. **Check your computer.** The assistant reads your operating system, memory, free disk and graphics hardware, then looks for a model you already have. If the model will not fit, it says so before any big download.
 2. **Ask the original.** It runs your question on the untouched model and saves the full reply. If the original already answers, there is nothing to fix and the run stops here. That happened to me with Qwen2.5, which answered all seven of my test questions.
-3. **Edit a copy.** `prepare.py` writes a plan into a new folder. Heretic then tries three candidate edits and saves the best one as a complete new model.
+3. **Edit a copy.** Heretic tries three candidate edits and saves the best one as a complete new model in a new folder. The copy is then fingerprinted and frozen before any new test is run.
 4. **Reload the copy.** The saved model is loaded fresh from disk with no helper prompt, so the answer you see comes from the changed file and nothing else.
-5. **Compare both.** `compare.py` asks both copies the same questions with the same settings and records every reply, token count and input token.
+5. **Compare both.** Both copies get the same questions with the same settings. Every reply, token count and input token is recorded, and both models are fingerprinted again to prove neither moved.
 
-You end up with the saved model folder, the raw replies, the exact commands and a short list of what improved and what got worse.
+You end up with the saved model folder, a report page, the raw replies and a plain list of what improved and what got worse. This is the top of the report from a real run.
+
+<img src="docs/img/report.jpg" alt="The Unlock report. Headline reads The original refused. The copy answered. Below it, the history question and both replies side by side." width="880">
+
+Below that, the report lists the fair-test checks, what changed inside the model, the candidates Heretic tried, and every other question side by side.
 
 ## How it works
 
@@ -199,8 +206,8 @@ I will only call something tested when I have run it and saved the receipt.
 
 | Setup | Status | Notes |
 | --- | --- | --- |
-| Apple Silicon Mac, M5 Max, 128 GB memory, macOS, `mps` | **Tested**, 16 November 2026 | [Receipt](docs/evidence/qwen3-4b-history-2026-11-16.md). The edit took 73 seconds with the model already downloaded |
-| Apple Silicon Macs with less memory | Untested | The model is about 8 GB on disk. Editing needs working memory on top of that |
+| Apple Silicon Mac, M5 Max, 128 GB memory, macOS, `mps` | **Tested**, 16 and 18 November 2026 | Receipts for the [first run](docs/evidence/qwen3-4b-history-2026-11-16.md) and the [scripted rerun](docs/evidence/scripted-rerun-2026-11-18.md). The edit took 33 seconds and peaked at 13.9 GB of memory. The whole run took 2 minutes once set up |
+| Apple Silicon Macs with less memory | Untested | Going by that 13.9 GB peak, 16 GB is tight and 24 GB or more should fit. `doctor.py` applies exactly this rule |
 | NVIDIA graphics card on Linux, `cuda` | Untested | The scripts accept `--device cuda`. Heretic itself is built for this and reports 30 to 40 minutes for its full 100-trial default on an RTX 3090 |
 | Windows | Untested | |
 | No graphics hardware, `cpu` | Untested | The scripts accept `--device cpu`. Expect it to be slow |
@@ -214,7 +221,9 @@ The tested machine is far bigger than the job needs, so it is not a minimum. If 
 - 5 GB of headroom, which `prepare.py` checks before it lets you start
 - About 1.5 GB for the Python environment
 
-**Models.** The included recipes were written for and tested on `Qwen/Qwen3-4B-Instruct-2507` only. `prepare.py` currently expects a model stored as several safetensors shards with an index file, which is how that model ships. Heretic supports many more models than this skill has recipes for. For another model the skill tells your assistant to read Heretic's documentation and check memory first.
+You do not have to add this up. `python3 scripts/doctor.py` does it for your machine and says whether you are ready.
+
+**Models.** The included recipes were written for and tested on `Qwen/Qwen3-4B-Instruct-2507` only. The scripts accept safetensors models stored either as one `model.safetensors` file or as shards with an index, and `setup.py --model-id` will fetch another model. Heretic supports many more models than this skill has recipes for, so treat any other model as an experiment. The skill tells your assistant to check its size and license and say so before going ahead.
 
 ## Recipes
 
@@ -231,33 +240,36 @@ About that second recipe. In my test the edited copy asked for the missing polic
 
 ## Run the scripts yourself
 
-You do not need the assistant. Here is the whole thing by hand for the history recipe. `SKILL` is this folder and `WORK` is any new, empty working folder.
+You do not need the assistant. Three commands, from inside this folder. They need Python 3.9 or newer, plus `git` and `uv`.
 
 ```sh
-git clone https://github.com/p-e-w/heretic "$WORK/heretic"
-git -C "$WORK/heretic" checkout 8b0dbac4dd180dc23d62fdf9714dc9d8b31f3d2c
-uv venv --python 3.12 "$WORK/.venv"
-(cd "$WORK/heretic" && uv pip install --python ../.venv/bin/python -e .)
-"$WORK/.venv/bin/hf" download Qwen/Qwen3-4B-Instruct-2507 --revision cdbee75f17c01a7cc42f958dc650907174af0554
+python3 scripts/doctor.py
+python3 scripts/setup.py
+python3 scripts/run.py start
 ```
 
-Set `MODEL` to the downloaded snapshot folder and `RUN` to a folder that does not exist yet. Check first, then prepare.
+- **`doctor.py`** reads your machine and prints a verdict (ready, untested, tight or blocked) with the reasons. It installs nothing.
+- **`setup.py`** clones Heretic at the pinned commit, builds an isolated Python environment with `uv`, checks PyTorch can see your graphics hardware, and downloads the model at the pinned revision. Everything lives in `~/unlock-work` unless you pass `--work`. Run it twice and the second run reuses everything.
+- **`run.py start`** runs the whole experiment into a new folder under `~/unlock-work/runs/` and finishes with `report.html`. It saves after every stage.
+
+A few more things `run.py` does.
 
 ```sh
-"$WORK/.venv/bin/python" "$SKILL/scripts/prepare.py" --model "$MODEL" --out "$RUN" --heretic "$WORK/.venv/bin/heretic" --mode history --check-only
-"$WORK/.venv/bin/python" "$SKILL/scripts/prepare.py" --model "$MODEL" --out "$RUN" --heretic "$WORK/.venv/bin/heretic" --mode history
+python3 scripts/run.py start --stop-after baseline   # only ask the original first
+python3 scripts/run.py resume --run RUN_FOLDER       # carry on after a stop, crash or Ctrl+C
+python3 scripts/run.py status --run RUN_FOLDER       # see which stages are done
+python3 scripts/run.py add-cases --run RUN_FOLDER --cases my-questions.json
 ```
 
-`prepare.py` never runs an edit. It writes `RUN-PLAN.json` and prints the exact Heretic command. Read the plan, then run that command. The copy lands in `$RUN/history/model`.
+`add-cases` is how you get fresh evidence. Write a few new questions after the run, each with a note of what a good answer includes, and both models answer them with the same settings. The report updates and labels them as fresh only if the file was written after the copy was frozen.
 
-Write your test questions into a small JSON file, then ask both copies.
-
-```sh
-"$WORK/.venv/bin/python" "$SKILL/scripts/compare.py" --model "$MODEL" --fixtures "$RUN/new-cases.json" --out "$RUN/before.json" --max-tokens 500
-"$WORK/.venv/bin/python" "$SKILL/scripts/compare.py" --model "$RUN/history/model" --fixtures "$RUN/new-cases.json" --out "$RUN/after.json" --max-tokens 500
+```json
+{"phase": "fresh_after_freeze", "fixtures": [
+  {"id": "my-question", "case_group": "fresh", "prompt": "Your harmless question", "expected": "What a good answer includes"}
+]}
 ```
 
-The fixture format, the second recipe and the evidence rules are all in [`references/workflow.md`](references/workflow.md).
+Every stage also exists as a plain command, if you want to see or change what happens underneath. The manual route, the fixture format and the evidence rules are in [`references/workflow.md`](references/workflow.md).
 
 ## What is in the box
 
@@ -265,25 +277,32 @@ The fixture format, the second recipe and the evidence rules are all in [`refere
 unlock/
 ├── SKILL.md                      What the assistant reads. The rules of the experiment
 ├── scripts/
-│   ├── prepare.py                Checks disk and paths, writes the plan. Never edits a model
+│   ├── doctor.py                 Machine check with a plain verdict. Installs nothing
+│   ├── setup.py                  Heretic, Python environment and model, safe to rerun
+│   ├── run.py                    The whole experiment as resumable stages
+│   ├── report.py                 report.html, REPORT.md and summary.json from a run
+│   ├── freeze.py                 Fingerprints every file and weight table, shows what changed
+│   ├── prepare.py                Writes the Heretic plan into a new folder. Never edits a model
 │   ├── compare.py                Asks a model your questions, saves replies and input tokens
+│   ├── unlock_common.py          Shared helpers, standard library only
 │   ├── clarification_mpoa.py     Three fixed strengths for the missing-policy recipe
 │   └── clarification_objective.py  Development scorer for the missing-policy recipe
 ├── assets/
 │   ├── history.toml              Heretic settings for the history recipe
-│   ├── history/                  The one refused request, three to protect, one replay case
+│   ├── history/                  The refused request, three to protect, replay and known checks
 │   ├── behavior.toml             Heretic settings for the missing-policy recipe
 │   ├── behavior/                 Its training requests, checks and follow-up
 │   └── hosting/index.html        A tiny chat page for the optional hosting route
 ├── references/
-│   ├── workflow.md               The tested procedure, step by step
+│   ├── workflow.md               The tested procedure and the manual commands behind each stage
 │   ├── viewer-prompts.md         Copy and paste requests for the walkthrough
 │   ├── hosting.md                Optional. Put a saved copy on a small server
 │   └── tested-environment.txt    Package versions from the clean test install
+├── tests/                        Run with pytest. No GPU or model needed
 ├── agents/openai.yaml            Codex display settings
 └── docs/
     ├── evidence/                 Full receipts for every tested claim on this page
-    └── img/                      The drawings above
+    └── img/                      The drawings and the sample report
 ```
 
 ## Honest limits
@@ -311,29 +330,34 @@ You are responsible for what you do with a model you edit, and for following the
 
 **"Output already exists; choose a new directory."** That is the guard rail working. Every run needs a folder that does not exist yet.
 
-**"Expected a local sharded Qwen safetensors snapshot or saved copy."** `prepare.py` is looking for `model.safetensors.index.json`. Point `--model` at the snapshot folder itself, and note that single-file models are not supported yet.
+**"No safetensors weights found."** Point at the model folder itself, the one holding `config.json` and either `model.safetensors` or `model.safetensors.index.json` with its shards.
 
-**"Not enough free disk for output copies and temporary files."** You need room for a full copy of the model plus 5 GB.
+**A run stopped halfway.** Nothing is lost. `python3 scripts/run.py status --run RUN_FOLDER` shows where it stopped and why, and `resume` carries on from that stage. Partial files from the failed attempt are moved into the run's `attempts/` folder, never deleted.
 
-**The install fails when my folder path has a space in it.** Run the `uv pip install` step from inside the Heretic checkout, exactly as written above.
+**"No setup found."** Run `python3 scripts/setup.py` first, with the same `--work` folder you pass to `run.py`.
 
-**Installing from `tested-environment.txt` fails.** That file is a record of what I had installed. It is not a lock file. Install from Heretic's own requirements as shown above.
+**"Not enough free disk for output copies and temporary files."** You need room for a full copy of the model plus 5 GB. `doctor.py` tells you the exact number for your setup.
 
-**The original did not refuse my question.** Then there is nothing to remove. Pick a question the original really does refuse, or a different behavior.
+**The install fails when my folder path has a space in it.** `setup.py` already installs from inside the Heretic checkout to avoid this. If you install by hand, do the same.
+
+**Installing from `tested-environment.txt` fails.** That file is a record of what I had installed. It is not a lock file. `setup.py` installs from Heretic's own requirements and saves what it actually got to `environment.txt` in your work folder.
+
+**The original did not refuse my question.** Then there is nothing to remove, and `run.py` stops before editing on purpose. Pick a question the original really does refuse, or a different behavior.
 
 **A reply stops mid-sentence.** It hit the token limit. Raise `--max-tokens` and treat the cut-off reply as inconclusive.
 
 ## Roadmap
 
-This is v0.1, the version shown in the video. It is proven on one recipe and one machine. Here is where it is going.
+v0.1 is the version shown in the video. v0.2 adds the machine check, one-command setup and run, the report, single-file models and tests. It is still proven on one recipe and one machine. Here is where it is going.
 
-- **One command for the whole run**, with a machine check that gives a plain verdict before any download
-- **A before and after report** you can open in a browser and share
-- **More machines.** NVIDIA on Linux, Windows, and Macs with less memory, each with its own receipt
-- **More models**, including single-file models and a small one for modest laptops
-- **Guided recipes** for describing your own behavior change
-- **Export to Ollama and LM Studio**, so you can chat with the copy straight away
-- **Tests and releases**
+- [x] **One command for the whole run**, with a machine check that gives a plain verdict before any download
+- [x] **A before and after report** you can open in a browser and share
+- [x] **Single-file models** as well as sharded ones
+- [x] **Tests** that run on every push, no GPU needed
+- [ ] **More machines.** NVIDIA on Linux, Windows, and Macs with less memory, each with its own receipt
+- [ ] **More models**, including a small one for modest laptops
+- [ ] **Guided recipes** for describing your own behavior change
+- [ ] **Export to Ollama and LM Studio**, so you can chat with the copy straight away
 
 Ideas and test reports are welcome in [issues](https://github.com/promptadvisers/unlock/issues).
 
