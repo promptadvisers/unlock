@@ -121,10 +121,30 @@ def set_aside(run: Path, path: Path) -> None:
 
 
 def alive(pid) -> bool:
+    """True when a process with this id is running. Never signals it."""
     try:
-        os.kill(int(pid), 0)
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        # On Windows os.kill(pid, 0) sends Ctrl+C, so ask the kernel instead.
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        code = ctypes.c_ulong()
+        ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+        kernel32.CloseHandle(handle)
+        return bool(ok) and code.value == 259  # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)
         return True
-    except (OSError, ValueError, TypeError):
+    except PermissionError:
+        return True
+    except OSError:
         return False
 
 
